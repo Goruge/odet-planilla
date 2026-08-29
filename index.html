@@ -120,8 +120,11 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
 .act .an{flex:1; font-size:.9rem} .act .an small{display:block; color:var(--ink-soft); font-size:.7rem; font-family:"IBM Plex Mono",monospace}
 .omrtag{font-family:"IBM Plex Mono",monospace; font-size:.58rem; letter-spacing:.05em; color:var(--gold-2);
   border:1px solid var(--line-2); border-radius:5px; padding:1px 5px; margin-left:6px}
-.act input.nota{width:64px; text-align:center; padding:9px; border:1px solid var(--line-2); border-radius:9px;
-  background:var(--paper); color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums}
+.act select.nota{width:82px; text-align:center; text-align-last:center; padding:9px 8px; border:1px solid var(--line-2);
+  border-radius:10px; background:var(--paper); color:var(--ink); font-weight:600; font-size:1rem;
+  font-variant-numeric:tabular-nums; -webkit-appearance:none; appearance:none}
+.act select.nota:focus{outline:2px solid var(--gold); outline-offset:1px}
+.act select.nota.tiene{border-color:var(--gold); background:color-mix(in srgb,var(--gold) 12%, var(--surface))}
 .addact{display:flex; gap:8px; padding:11px 16px; border-top:1px solid var(--surface-2)}
 .addact input{flex:1; padding:9px 11px; border:1px solid var(--line-2); border-radius:9px; background:var(--paper); color:var(--ink); font-size:.9rem}
 .addact button{border:1px solid var(--line-2); background:var(--surface-2); color:var(--ink); border-radius:9px; padding:0 14px; font-size:.85rem}
@@ -208,6 +211,8 @@ const SABERES=[
   {k:'evaluacion',label:'Evaluación de periodo',color:'var(--eval)'},
 ];
 const $=s=>document.querySelector(s);
+// Opciones de nota (1.0 a 5.0, paso 0.1) — el <select> abre la rueda de scroll en el celular.
+const NOTA_OPCIONES=(()=>{let o='<option value="">—</option>';for(let v=10;v<=50;v++){const s=(v/10).toFixed(1);o+=`<option value="${s}">${s}</option>`;}return o;})();
 let PESOS={cognitivo:30,procedimental:40,actitudinal:20,evaluacion_periodo:10};
 let CURRENT={planilla:null,estudiantes:[],actividades:[],notas:[]};
 
@@ -314,11 +319,14 @@ function render(e){
     html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3><span class="w">${P[s.k]}%</span><span class="pct">${pr!=null?pr.toFixed(1):'—'}</span></div>`;
     acts.forEach(a=>{const n=notaDe(a.id,e.id);const v=n&&n.valor!=null?Number(n.valor).toFixed(1):'';
       html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}${a.origen==='omr'?'<span class="omrtag">OMR</span>':''}</div>
-        <input class="nota" inputmode="decimal" data-act="${a.id}" data-est="${e.id}" value="${v}" placeholder="—"></div>`;});
+        <select class="nota${v?' tiene':''}" data-act="${a.id}" data-est="${e.id}" data-val="${v}">${NOTA_OPCIONES}</select></div>`;});
     html+=`<div class="addact"><input placeholder="Nueva actividad de ${s.label.toLowerCase()}" data-newname="${s.k}"><button data-add="${s.k}">+ Agregar</button></div></div>`;
   }
   box.innerHTML=html;
-  box.querySelectorAll('input.nota').forEach(inp=>inp.addEventListener('change',()=>guardarNota(inp.dataset.act,inp.dataset.est,inp.value,e)));
+  box.querySelectorAll('select.nota').forEach(sel=>{
+    sel.value=sel.dataset.val||'';
+    sel.addEventListener('change',()=>guardarNota(sel.dataset.act,sel.dataset.est,sel.value,e));
+  });
   box.querySelectorAll('button[data-add]').forEach(btn=>btn.addEventListener('click',()=>agregarActividad(btn.dataset.add,box.querySelector(`input[data-newname="${btn.dataset.add}"]`).value.trim(),e)));
 }
 
