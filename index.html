@@ -120,11 +120,21 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
 .act .an{flex:1; font-size:.9rem} .act .an small{display:block; color:var(--ink-soft); font-size:.7rem; font-family:"IBM Plex Mono",monospace}
 .omrtag{font-family:"IBM Plex Mono",monospace; font-size:.58rem; letter-spacing:.05em; color:var(--gold-2);
   border:1px solid var(--line-2); border-radius:5px; padding:1px 5px; margin-left:6px}
-.act select.nota{width:82px; text-align:center; text-align-last:center; padding:9px 8px; border:1px solid var(--line-2);
-  border-radius:10px; background:var(--paper); color:var(--ink); font-weight:600; font-size:1rem;
-  font-variant-numeric:tabular-nums; -webkit-appearance:none; appearance:none}
-.act select.nota:focus{outline:2px solid var(--gold); outline-offset:1px}
-.act select.nota.tiene{border-color:var(--gold); background:color-mix(in srgb,var(--gold) 12%, var(--surface))}
+/* Rueda de nota INLINE: el scroll pasa dentro del recuadro, sin popup */
+.act .wheel{width:74px; height:90px; overflow-y:scroll; scroll-snap-type:y mandatory; position:relative;
+  border:1px solid var(--line-2); border-radius:12px; background:var(--paper); flex:none; touch-action:pan-y;
+  scrollbar-width:none; -ms-overflow-style:none;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent);
+  mask-image:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
+.act .wheel::-webkit-scrollbar{display:none}
+.act .wtrack{padding:30px 0}
+.act .wopt{height:30px; display:grid; place-items:center; scroll-snap-align:center;
+  font-weight:600; font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:.95rem;
+  transition:color .12s, transform .12s}
+.act .wopt.on{color:var(--gold-2); transform:scale(1.22)}
+.act .wband{position:absolute; left:5px; right:5px; top:30px; height:30px; border-radius:8px;
+  background:color-mix(in srgb,var(--gold) 15%, transparent);
+  border:1px solid color-mix(in srgb,var(--gold) 45%, transparent); pointer-events:none}
 .addact{display:flex; gap:8px; padding:11px 16px; border-top:1px solid var(--surface-2)}
 .addact input{flex:1; padding:9px 11px; border:1px solid var(--line-2); border-radius:9px; background:var(--paper); color:var(--ink); font-size:.9rem}
 .addact button{border:1px solid var(--line-2); background:var(--surface-2); color:var(--ink); border-radius:9px; padding:0 14px; font-size:.85rem}
@@ -211,8 +221,8 @@ const SABERES=[
   {k:'evaluacion',label:'Evaluación de periodo',color:'var(--eval)'},
 ];
 const $=s=>document.querySelector(s);
-// Opciones de nota (1.0 a 5.0, paso 0.1) — el <select> abre la rueda de scroll en el celular.
-const NOTA_OPCIONES=(()=>{let o='<option value="">—</option>';for(let v=10;v<=50;v++){const s=(v/10).toFixed(1);o+=`<option value="${s}">${s}</option>`;}return o;})();
+// Valores de nota (— , 1.0 … 5.0, paso 0.1) para la rueda inline.
+const NOTA_VALS=(()=>{const a=[''];for(let v=10;v<=50;v++)a.push((v/10).toFixed(1));return a;})();
 let PESOS={cognitivo:30,procedimental:40,actitudinal:20,evaluacion_periodo:10};
 let CURRENT={planilla:null,estudiantes:[],actividades:[],notas:[]};
 
@@ -312,28 +322,49 @@ function render(e){
   const P={cognitivo:PESOS.cognitivo,procedimental:PESOS.procedimental,actitudinal:PESOS.actitudinal,evaluacion:PESOS.evaluacion_periodo};
   let html=`<div class="hdr-card"><h2>${sin?'Estudiante sin nombre':e.nombre}</h2>
     <span class="mono" style="color:var(--ink-soft);font-size:.8rem">código ${e.codigo}${e.documento?` · doc ${e.documento}`:''}</span>
-    <div class="big"><div class="num" style="color:${d.c}">${c!=null?c.toFixed(1):'—'}</div>
-    <div><b style="color:${d.c}">${d.t}</b><br><span class="hint" style="font-size:.8rem">Consolidado del periodo</span></div></div></div>`;
+    <div class="big"><div class="num" id="hdrNum" style="color:${d.c}">${c!=null?c.toFixed(1):'—'}</div>
+    <div><b id="hdrDes" style="color:${d.c}">${d.t}</b><br><span class="hint" style="font-size:.8rem">Consolidado del periodo</span></div></div></div>`;
   for(const s of SABERES){
     const acts=actividadesDe(s.k);const pr=promedioSaber(s.k,e.id);
-    html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3><span class="w">${P[s.k]}%</span><span class="pct">${pr!=null?pr.toFixed(1):'—'}</span></div>`;
+    html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3><span class="w">${P[s.k]}%</span><span class="pct" data-saber="${s.k}">${pr!=null?pr.toFixed(1):'—'}</span></div>`;
     acts.forEach(a=>{const n=notaDe(a.id,e.id);const v=n&&n.valor!=null?Number(n.valor).toFixed(1):'';
+      const optsH=NOTA_VALS.map(o=>`<div class="wopt">${o||'—'}</div>`).join('');
       html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}${a.origen==='omr'?'<span class="omrtag">OMR</span>':''}</div>
-        <select class="nota${v?' tiene':''}" data-act="${a.id}" data-est="${e.id}" data-val="${v}">${NOTA_OPCIONES}</select></div>`;});
+        <div class="wheel" data-act="${a.id}" data-est="${e.id}" data-val="${v}"><div class="wtrack">${optsH}</div><div class="wband"></div></div></div>`;});
     html+=`<div class="addact"><input placeholder="Nueva actividad de ${s.label.toLowerCase()}" data-newname="${s.k}"><button data-add="${s.k}">+ Agregar</button></div></div>`;
   }
   box.innerHTML=html;
-  box.querySelectorAll('select.nota').forEach(sel=>{
-    sel.value=sel.dataset.val||'';
-    sel.addEventListener('change',()=>guardarNota(sel.dataset.act,sel.dataset.est,sel.value,e));
-  });
+  box.querySelectorAll('.wheel').forEach(w=>initWheel(w,e));
   box.querySelectorAll('button[data-add]').forEach(btn=>btn.addEventListener('click',()=>agregarActividad(btn.dataset.add,box.querySelector(`input[data-newname="${btn.dataset.add}"]`).value.trim(),e)));
 }
 
+function initWheel(w, est){
+  const H=30;
+  const opts=[...w.querySelectorAll('.wopt')];
+  const mark=()=>{const i=Math.round(w.scrollTop/H); opts.forEach((o,j)=>o.classList.toggle('on',j===i));};
+  const idx=Math.max(0, NOTA_VALS.indexOf(w.dataset.val||''));
+  w.scrollTop=idx*H; mark();
+  let t;
+  w.addEventListener('scroll',()=>{
+    mark(); clearTimeout(t);
+    t=setTimeout(()=>{
+      const i=Math.max(0,Math.min(NOTA_VALS.length-1,Math.round(w.scrollTop/H)));
+      const v=NOTA_VALS[i];
+      if(v!==w.dataset.val){ w.dataset.val=v; guardarNota(w.dataset.act,w.dataset.est,v,est,false); }
+    },150);
+  });
+}
+
 // ── escrituras ──
-async function guardarNota(a,e,valStr,est){
+function actualizarTotales(est){
+  const c=consolidado(est.id); const d=desempeno(c);
+  const num=$('#hdrNum'); if(num){num.textContent=c!=null?c.toFixed(1):'—'; num.style.color=d.c;}
+  const des=$('#hdrDes'); if(des){des.textContent=d.t; des.style.color=d.c;}
+  document.querySelectorAll('.pct[data-saber]').forEach(el=>{const pr=promedioSaber(el.dataset.saber,est.id); el.textContent=pr!=null?pr.toFixed(1):'—';});
+}
+async function guardarNota(a,e,valStr,est,rerender=true){
   const v=valStr.trim()===''?null:Number(valStr.replace(',','.'));
-  if(v!=null&&(isNaN(v)||v<1||v>5)){toast('La nota va de 1.0 a 5.0');render(est);return;}
+  if(v!=null&&(isNaN(v)||v<1||v>5)){toast('La nota va de 1.0 a 5.0');return;}
   const now=new Date().toISOString();
   if(v==null){const n=notaDe(a,e);if(n){await sb.from('nota').update({activo:false,actualizado_en:now}).eq('id',n.id);CURRENT.notas=CURRENT.notas.filter(x=>x.id!==n.id);}}
   else{
@@ -341,7 +372,7 @@ async function guardarNota(a,e,valStr,est){
     if(error){toast('No se pudo guardar');return;}
     const i=CURRENT.notas.findIndex(x=>x.actividad_id===a&&x.estudiante_id===e);if(i>=0)CURRENT.notas[i]=data;else CURRENT.notas.push(data);
   }
-  toast('Guardado');render(est);
+  toast('Guardado'); if(rerender)render(est); else actualizarTotales(est);
 }
 async function agregarActividad(saber,nombre,est){
   if(!nombre){toast('Ponle un nombre a la actividad');return;}
