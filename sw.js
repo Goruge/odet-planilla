@@ -1,8 +1,8 @@
 // Service worker — Planilla ODET
 // App shell cache-first (para abrir sin señal). Las llamadas a Supabase van por
 // red normal (los datos frescos importan; el offline de datos es una fase futura).
-const CACHE = 'odet-planilla-v1';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png'];
+const CACHE = 'odet-planilla-v2';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
