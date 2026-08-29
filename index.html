@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16222E">
+<title>Planilla ODET</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --paper:#F3F6FA; --surface:#fff; --surface-2:#EDF1F7; --ink:#16222E; --ink-soft:#4E5C6B;
+  --line:#D8E0EA; --gold:#9A6A15; --gold-b:#C8912E; --blue:#1F4E79;
+  --cog:#2C6FB0; --proc:#2E8B77; --act:#9A5CC0; --eval:#C8912E;
+  --bajo:#C0392B; --basico:#B8860B; --alto:#2E8B77; --superior:#1F7A44;
+}
+@media(prefers-color-scheme:dark){:root{
+  --paper:#0E151D; --surface:#161F29; --surface-2:#1C2733; --ink:#E9EEF4; --ink-soft:#A2AEBB;
+  --line:#26313E; --gold:#E4AE52; --gold-b:#F0C271; --blue:#7FB0DC;
+  --cog:#5F9BD8; --proc:#4FB79E; --act:#BE85DC; --eval:#E4AE52;
+  --bajo:#E77; --basico:#E4AE52; --alto:#4FB79E; --superior:#5FCF87;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:"IBM Plex Sans",system-ui,sans-serif;
+  line-height:1.5; -webkit-font-smoothing:antialiased; padding-bottom:env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:"Fraunces",Georgia,serif; margin:0}
+button{font-family:inherit; cursor:pointer}
+input{font-family:inherit; font-size:16px}
+.mono{font-family:"IBM Plex Mono",monospace}
+.hidden{display:none !important}
+
+/* header */
+.top{position:sticky; top:0; z-index:5; background:var(--surface); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:10px; padding:12px 16px; padding-top:calc(12px + env(safe-area-inset-top))}
+.top h1{font-size:1.15rem; flex:1}
+.top .eyebrow{font-family:"IBM Plex Mono",monospace; font-size:.62rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--gold); display:block}
+.icon-btn{background:none; border:1px solid var(--line); color:var(--ink-soft); border-radius:9px;
+  padding:7px 11px; font-size:.85rem}
+.icon-btn:active{background:var(--surface-2)}
+
+.wrap{max-width:720px; margin:0 auto; padding:16px}
+
+/* login */
+.login{min-height:82vh; display:grid; place-items:center; padding:24px}
+.login .card{width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line);
+  border-radius:16px; padding:28px 24px; box-shadow:0 10px 40px -22px rgba(0,0,0,.4)}
+.login .brand{text-align:center; margin-bottom:20px}
+.login .brand .eyebrow{font-family:"IBM Plex Mono",monospace; font-size:.66rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold)}
+.login .brand h1{font-size:1.7rem; margin-top:4px}
+label{display:block; font-size:.8rem; color:var(--ink-soft); margin:14px 0 5px; font-weight:500}
+input[type=email],input[type=password]{width:100%; padding:12px 13px; border:1px solid var(--line);
+  border-radius:10px; background:var(--paper); color:var(--ink)}
+input:focus{outline:2px solid var(--gold-b); outline-offset:1px}
+.btn{width:100%; margin-top:20px; padding:13px; border:none; border-radius:10px; background:var(--blue);
+  color:#fff; font-weight:600; font-size:1rem}
+.btn:active{filter:brightness(.94)}
+.btn.gold{background:var(--gold-b); color:#231a08}
+.err{color:var(--bajo); font-size:.85rem; margin-top:12px; min-height:1.2em; text-align:center}
+
+/* lists */
+.hint{color:var(--ink-soft); font-size:.9rem}
+.plist{display:grid; gap:11px; margin-top:6px}
+.pcard{display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--line);
+  border-radius:13px; padding:15px 16px; text-align:left; width:100%; color:inherit}
+.pcard:active{background:var(--surface-2)}
+.pcard .curso{font-family:"Fraunces",serif; font-size:1.5rem; font-weight:600; color:var(--gold);
+  min-width:56px; text-align:center; font-variant-numeric:tabular-nums}
+.pcard .meta{flex:1}
+.pcard .meta b{display:block; font-weight:600}
+.pcard .meta span{font-size:.82rem; color:var(--ink-soft)}
+.pcard .chev{color:var(--ink-soft)}
+
+/* student rows */
+.srow{display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--line);
+  border-radius:12px; padding:12px 14px; width:100%; text-align:left; color:inherit; margin-bottom:9px}
+.srow:active{background:var(--surface-2)}
+.srow .n{font-family:"IBM Plex Mono",monospace; font-size:.75rem; color:var(--ink-soft); min-width:22px}
+.srow .nom{flex:1; font-size:.95rem}
+.srow .cod{font-family:"IBM Plex Mono",monospace; font-size:.72rem; color:var(--ink-soft)}
+.pill{font-family:"IBM Plex Mono",monospace; font-size:.82rem; font-weight:600; padding:4px 10px;
+  border-radius:999px; color:#fff; min-width:44px; text-align:center; font-variant-numeric:tabular-nums}
+
+/* student detail */
+.hdr-card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:16px}
+.hdr-card h2{font-size:1.25rem}
+.hdr-card .big{display:flex; align-items:center; gap:12px; margin-top:12px}
+.hdr-card .big .num{font-family:"Fraunces",serif; font-size:2.4rem; font-weight:600; line-height:1;
+  font-variant-numeric:tabular-nums}
+.saber{background:var(--surface); border:1px solid var(--line); border-radius:14px; margin-bottom:14px; overflow:hidden}
+.saber .sh{display:flex; align-items:center; gap:9px; padding:12px 16px; border-bottom:1px solid var(--line)}
+.saber .sh .chip{width:11px; height:11px; border-radius:3px}
+.saber .sh h3{font-size:1rem; flex:1}
+.saber .sh .pct{font-family:"IBM Plex Mono",monospace; font-size:.8rem; color:var(--ink-soft)}
+.saber .sh .w{font-family:"IBM Plex Mono",monospace; font-size:.7rem; color:var(--ink-soft)}
+.act{display:flex; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid var(--surface-2)}
+.act:first-child{border-top:none}
+.act .an{flex:1; font-size:.9rem}
+.act .an small{display:block; color:var(--ink-soft); font-size:.7rem; font-family:"IBM Plex Mono",monospace}
+.act .omrtag{font-family:"IBM Plex Mono",monospace; font-size:.6rem; letter-spacing:.05em; color:var(--gold);
+  border:1px solid var(--line); border-radius:5px; padding:1px 5px}
+.act input.nota{width:64px; text-align:center; padding:9px; border:1px solid var(--line); border-radius:9px;
+  background:var(--paper); color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums}
+.addact{display:flex; gap:8px; padding:11px 16px; border-top:1px solid var(--surface-2)}
+.addact input{flex:1; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--paper); color:var(--ink); font-size:.9rem}
+.addact button{border:1px solid var(--line); background:var(--surface-2); color:var(--ink); border-radius:9px; padding:0 14px; font-size:.85rem}
+
+.back{background:none; border:none; color:var(--blue); font-size:.92rem; padding:8px 0; margin-bottom:6px}
+.toast{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:var(--paper);
+  padding:10px 18px; border-radius:999px; font-size:.85rem; opacity:0; transition:opacity .2s; pointer-events:none; z-index:20}
+.toast.show{opacity:.96}
+.spin{display:grid; place-items:center; padding:50px; color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="login">
+  <form class="card" id="loginForm">
+    <div class="brand">
+      <div class="eyebrow">ODET</div>
+      <h1>Planilla</h1>
+    </div>
+    <label for="email">Correo</label>
+    <input id="email" type="email" autocomplete="username" required placeholder="docente@correo.com">
+    <label for="pass">Contraseña</label>
+    <input id="pass" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit" id="loginBtn">Entrar</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <div class="top">
+    <div style="flex:1">
+      <span class="eyebrow">ODET · Planilla</span>
+      <h1 id="topTitle">Mis cursos</h1>
+    </div>
+    <button class="icon-btn" id="backTop" style="display:none">← Atrás</button>
+    <button class="icon-btn" id="logoutBtn">Salir</button>
+  </div>
+  <div class="wrap">
+    <div id="viewPlanillas"></div>
+    <div id="viewStudents" class="hidden"></div>
+    <div id="viewStudent" class="hidden"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://ixnaffcfnskgxviopeod.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bmFmZmNmbnNrZ3h2aW9wZW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODc5OTUsImV4cCI6MjA5Njc2Mzk5NX0.OjdZ7oEs2XNkXDc_IqRIVyuRc2qHwJwLhA17tcbxaE8';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const SABERES = [
+  { k:'cognitivo',    label:'Cognitivo',    peso:30, color:'var(--cog)' },
+  { k:'procedimental',label:'Procedimental',peso:40, color:'var(--proc)' },
+  { k:'actitudinal',  label:'Actitudinal',  peso:20, color:'var(--act)' },
+  { k:'evaluacion',   label:'Evaluación de periodo', peso:10, color:'var(--eval)' },
+];
+const $ = s => document.querySelector(s);
+let PESOS = { cognitivo:30, procedimental:40, actitudinal:20, evaluacion_periodo:10 };
+let CURRENT = { planilla:null, estudiantes:[], actividades:[], notas:[] };
+
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1800); }
+function desempeno(n){ if(n==null) return {t:'—',c:'var(--ink-soft)'}; if(n<3) return {t:'Bajo',c:'var(--bajo)'}; if(n<4) return {t:'Básico',c:'var(--basico)'}; if(n<=4.5) return {t:'Alto',c:'var(--alto)'}; return {t:'Superior',c:'var(--superior)'}; }
+
+// ── Auth ──
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('#loginErr').textContent=''; $('#loginBtn').disabled=true; $('#loginBtn').textContent='Entrando…';
+  const { error } = await sb.auth.signInWithPassword({ email:$('#email').value.trim(), password:$('#pass').value });
+  $('#loginBtn').disabled=false; $('#loginBtn').textContent='Entrar';
+  if(error){ $('#loginErr').textContent = error.message.includes('Invalid') ? 'Correo o contraseña incorrectos.' : error.message; return; }
+  enterApp();
+});
+$('#logoutBtn').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
+
+async function boot(){ const { data } = await sb.auth.getSession(); if(data.session) enterApp(); }
+async function enterApp(){ $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); await cargarPesos(); await verPlanillas(); }
+
+async function cargarPesos(){
+  const { data } = await sb.from('pesos_evaluacion').select('*').maybeSingle();
+  if(data) PESOS = data;
+}
+
+// ── Planillas ──
+async function verPlanillas(){
+  showView('viewPlanillas'); $('#topTitle').textContent='Mis cursos'; $('#backTop').style.display='none';
+  const box = $('#viewPlanillas'); box.innerHTML='<div class="spin">Cargando…</div>';
+  const { data, error } = await sb.from('planilla').select('*').eq('activo',true).order('anio',{ascending:false}).order('curso');
+  if(error){ box.innerHTML=`<p class="hint">Error: ${error.message}</p>`; return; }
+  if(!data.length){ box.innerHTML='<p class="hint">Aún no hay cursos. Cuando califiques un examen en ODET-Escritorio, el curso aparece aquí.</p>'; return; }
+  box.innerHTML = '<p class="hint" style="margin:2px 0 12px">Toca un curso para ver sus estudiantes.</p><div class="plist"></div>';
+  const list = box.querySelector('.plist');
+  data.forEach(p=>{
+    const b=document.createElement('button'); b.className='pcard';
+    b.innerHTML=`<div class="curso">${p.curso||'—'}</div>
+      <div class="meta"><b>${p.asignatura||p.area||p.sigla||'Área'}</b>
+      <span>Grado ${p.grado_num}° · Periodo ${p.periodo} · ${p.anio}</span></div>
+      <div class="chev">›</div>`;
+    b.onclick=()=>verEstudiantes(p);
+    list.appendChild(b);
+  });
+}
+
+// ── Estudiantes de una planilla ──
+async function verEstudiantes(p){
+  CURRENT.planilla=p; showView('viewStudents');
+  $('#topTitle').textContent=`Curso ${p.curso}`; $('#backTop').style.display='';
+  $('#backTop').onclick=verPlanillas;
+  const box=$('#viewStudents'); box.innerHTML='<div class="spin">Cargando…</div>';
+
+  const [est, act] = await Promise.all([
+    sb.from('estudiante').select('*').eq('activo',true).eq('curso',p.curso).eq('anio',p.anio).order('nombre'),
+    sb.from('actividad').select('*').eq('activo',true).eq('planilla_id',p.id),
+  ]);
+  CURRENT.estudiantes = est.data||[]; CURRENT.actividades = act.data||[];
+  const actIds = CURRENT.actividades.map(a=>a.id);
+  let notas=[];
+  if(actIds.length){ const { data } = await sb.from('nota').select('*').eq('activo',true).in('actividad_id',actIds); notas=data||[]; }
+  CURRENT.notas = notas;
+
+  if(!CURRENT.estudiantes.length){ box.innerHTML='<p class="hint">Este curso aún no tiene estudiantes.</p>'; return; }
+  box.innerHTML='';
+  CURRENT.estudiantes.forEach((e,i)=>{
+    const c=consolidado(e.id); const d=desempeno(c);
+    const b=document.createElement('button'); b.className='srow';
+    b.innerHTML=`<span class="n">${e.numero||i+1}</span>
+      <span class="nom">${e.nombre}<br><span class="cod">cód ${e.codigo}</span></span>
+      <span class="pill" style="background:${d.c}">${c!=null?c.toFixed(1):'—'}</span>`;
+    b.onclick=()=>verEstudiante(e);
+    box.appendChild(b);
+  });
+}
+
+// ── Detalle de un estudiante ──
+function actividadesDe(saber){ return CURRENT.actividades.filter(a=>a.saber===saber).sort((x,y)=>x.numero-y.numero); }
+function notaDe(actId, estId){ return CURRENT.notas.find(n=>n.actividad_id===actId && n.estudiante_id===estId); }
+function promedioSaber(saber, estId){
+  const acts=actividadesDe(saber); const vals=[];
+  acts.forEach(a=>{ const n=notaDe(a.id,estId); if(n && n.valor!=null) vals.push(Number(n.valor)); });
+  if(!vals.length) return null;
+  return vals.reduce((s,v)=>s+v,0)/vals.length;
+}
+function consolidado(estId){
+  const pesos={cognitivo:PESOS.cognitivo,procedimental:PESOS.procedimental,actitudinal:PESOS.actitudinal,evaluacion:PESOS.evaluacion_periodo};
+  let suma=0, pesoTotal=0;
+  for(const s of SABERES){ const pr=promedioSaber(s.k,estId); if(pr!=null){ suma+=pr*pesos[s.k]; pesoTotal+=pesos[s.k]; } }
+  if(!pesoTotal) return null;
+  return Math.round((suma/pesoTotal)*10)/10;
+}
+
+function verEstudiante(e){
+  showView('viewStudent'); $('#topTitle').textContent='Estudiante'; $('#backTop').style.display='';
+  $('#backTop').onclick=()=>verEstudiantes(CURRENT.planilla);
+  render_estudiante(e);
+}
+function render_estudiante(e){
+  const box=$('#viewStudent'); const c=consolidado(e.id); const d=desempeno(c);
+  const pesos={cognitivo:PESOS.cognitivo,procedimental:PESOS.procedimental,actitudinal:PESOS.actitudinal,evaluacion:PESOS.evaluacion_periodo};
+  let html=`<div class="hdr-card"><h2>${e.nombre}</h2>
+    <span class="cod mono" style="color:var(--ink-soft);font-size:.8rem">código ${e.codigo}${e.documento?` · doc ${e.documento}`:''}</span>
+    <div class="big"><div class="num" style="color:${d.c}">${c!=null?c.toFixed(1):'—'}</div>
+    <div><b style="color:${d.c}">${d.t}</b><br><span class="hint" style="font-size:.8rem">Consolidado del periodo</span></div></div></div>`;
+
+  for(const s of SABERES){
+    const acts=actividadesDe(s.k); const pr=promedioSaber(s.k,e.id);
+    html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span>
+      <h3>${s.label}</h3><span class="w">${pesos[s.k]}%</span>
+      <span class="pct">${pr!=null?pr.toFixed(1):'—'}</span></div>`;
+    acts.forEach(a=>{
+      const n=notaDe(a.id,e.id); const val=n&&n.valor!=null?Number(n.valor).toFixed(1):'';
+      html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}
+        ${a.origen==='omr'?'<span class="omrtag">OMR</span>':''}</div>
+        <input class="nota" inputmode="decimal" data-act="${a.id}" data-est="${e.id}" value="${val}" placeholder="—"></div>`;
+    });
+    html+=`<div class="addact"><input placeholder="Nueva actividad de ${s.label.toLowerCase()}" data-newname="${s.k}">
+      <button data-add="${s.k}" data-est="${e.id}">+ Agregar</button></div></div>`;
+  }
+  box.innerHTML=html;
+
+  box.querySelectorAll('input.nota').forEach(inp=>{
+    inp.addEventListener('change', ()=>guardarNota(inp.dataset.act, inp.dataset.est, inp.value, e));
+  });
+  box.querySelectorAll('button[data-add]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const nmeInput=box.querySelector(`input[data-newname="${btn.dataset.add}"]`);
+      agregarActividad(btn.dataset.add, nmeInput.value.trim(), e);
+    });
+  });
+}
+
+// ── Escrituras ──
+async function guardarNota(actId, estId, valorStr, e){
+  const v=valorStr.trim()===''?null:Number(valorStr.replace(',','.'));
+  if(v!=null && (isNaN(v) || v<1 || v>5)){ toast('La nota va de 1.0 a 5.0'); render_estudiante(e); return; }
+  const now=new Date().toISOString();
+  if(v==null){
+    const n=notaDe(actId,estId); if(n){ await sb.from('nota').update({activo:false,actualizado_en:now}).eq('id',n.id); CURRENT.notas=CURRENT.notas.filter(x=>x.id!==n.id); }
+  } else {
+    const row={ actividad_id:actId, estudiante_id:estId, valor:v, fuente:'manual', activo:true, actualizado_en:now };
+    const { data, error } = await sb.from('nota').upsert(row,{onConflict:'actividad_id,estudiante_id'}).select().single();
+    if(error){ toast('No se pudo guardar'); return; }
+    const i=CURRENT.notas.findIndex(x=>x.actividad_id===actId && x.estudiante_id===estId);
+    if(i>=0) CURRENT.notas[i]=data; else CURRENT.notas.push(data);
+  }
+  toast('Guardado'); render_estudiante(e);
+}
+async function agregarActividad(saber, nombre, e){
+  if(!nombre){ toast('Ponle un nombre a la actividad'); return; }
+  const num=(actividadesDe(saber).reduce((m,a)=>Math.max(m,a.numero),0))+1;
+  const row={ planilla_id:CURRENT.planilla.id, saber, numero:num, nombre, origen:'manual', activo:true, actualizado_en:new Date().toISOString() };
+  const { data, error } = await sb.from('actividad').insert(row).select().single();
+  if(error){ toast('No se pudo crear'); return; }
+  CURRENT.actividades.push(data); toast('Actividad creada'); render_estudiante(e);
+}
+
+function showView(id){ ['viewPlanillas','viewStudents','viewStudent'].forEach(v=>$('#'+v).classList.toggle('hidden', v!==id)); window.scrollTo(0,0); }
+
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+boot();
+</script>
+</body>
+</html>
