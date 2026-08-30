@@ -219,8 +219,8 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
   <div class="sheet">
     <div class="grip"></div>
     <h3>Agregar listado de estudiantes</h3>
-    <p class="hint" style="margin:2px 0 14px">Sube el listado del curso en Excel (<b>.xlsx</b>). Toma el documento y el nombre de cada estudiante; el código es los últimos 4 dígitos del documento.</p>
-    <label class="flab">Curso</label>
+    <p class="hint" style="margin:2px 0 14px">Sube el listado en Excel (<b>.xlsx</b>). Si el archivo trae <b>una pestaña por curso</b> (como el de Punto Edu), sube todos los cursos del grado de una vez. Toma el documento y el nombre; el código son los últimos 4 dígitos.</p>
+    <label class="flab">Curso <span style="opacity:.7">(déjalo vacío si el archivo trae una pestaña por curso)</span></label>
     <input class="finp" id="rCurso" placeholder="Ej: 401" autocomplete="off">
     <label class="flab">Grado</label>
     <select class="finp" id="rGrado"></select>
@@ -502,7 +502,7 @@ async function agregarActividad(saber,nombre,est){
 // ── Agregar listado de estudiantes (roster) ──
 function abrirRoster(){
   const g=$('#rGrado'); if(!g.options.length){for(let i=1;i<=11;i++){const o=document.createElement('option');o.value=i;o.textContent=`Grado ${i}°`;g.appendChild(o);}}
-  $('#rCurso').value=''; $('#rFile').value=''; $('#rMsg').textContent='';
+  $('#rCurso').value=''; $('#rFile').value=''; $('#rMsg').textContent=''; _rosterPending=null;
   $('#rmodal').classList.add('show');
 }
 $('#rCancel').addEventListener('click',()=>$('#rmodal').classList.remove('show'));
@@ -527,42 +527,60 @@ function _parseListado(rows){
   }
   return out;
 }
+// Cada PESTAÑA del archivo es un curso (así exporta Punto Edu un grado completo).
+// El nombre de la hoja es el código del curso. Un archivo de una sola hoja usa
+// el curso escrito a mano. Multi-curso pide confirmación (dato de menores).
+let _rosterPending=null;
 async function subirListado(){
-  const curso=$('#rCurso').value.trim();
+  const msg=$('#rMsg');
   const grado=parseInt($('#rGrado').value,10);
   const file=$('#rFile').files[0];
-  const msg=$('#rMsg');
-  if(!curso){msg.textContent='Escribe el curso (ej: 401).';return;}
-  if(!file){msg.textContent='Elige el archivo .xlsx del listado.';return;}
   if(!ME||!ME.id){msg.textContent='Sesión expirada. Vuelve a entrar.';return;}
+  // Segundo toque: confirmar la subida multi-curso ya detectada.
+  if(_rosterPending){ const p=_rosterPending; _rosterPending=null; await _subirCursos(p,grado); return; }
+  if(!file){msg.textContent='Elige el archivo .xlsx del listado.';return;}
   msg.textContent='Leyendo el archivo…';
-  let estudiantes;
-  try{
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(buf,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    estudiantes=_parseListado(rows);
-  }catch(err){ msg.textContent='No pude leer el archivo. Ábrelo en Excel y usa "Guardar como .xlsx".'; return; }
-  if(!estudiantes.length){ msg.textContent='No encontré estudiantes (documento + nombre) en el archivo.'; return; }
-  msg.textContent=`Subiendo ${estudiantes.length} estudiante(s)…`;
-  const anio=new Date().getFullYear();
-  const now=new Date().toISOString();
-  // Registro del curso (para que aparezca en la lista aunque no haya notas aún).
-  const cid=await uid('curso',ME.id,curso,anio);
-  const {error:ec}=await sb.from('curso').upsert({id:cid,curso,grado_num:grado,anio,activo:true,actualizado_en:now},{onConflict:'id'});
-  if(ec){ msg.textContent='No pude registrar el curso: '+ec.message; return; }
-  // Estudiantes con id determinista (coincide con el OMR por documento).
-  const filas=[];
-  for(const e of estudiantes){
-    const llave='doc:'+e.documento;
-    filas.push({id:await uid('estudiante',ME.id,curso,anio,llave),curso,anio,numero:e.numero,
-      documento:e.documento,codigo:e.codigo,nombre:e.nombre,activo:true,actualizado_en:now});
+  let wb;
+  try{ wb=XLSX.read(await file.arrayBuffer(),{type:'array'}); }
+  catch(err){ msg.textContent='No pude leer el archivo. Ábrelo en Excel y usa "Guardar como .xlsx".'; return; }
+  const cursos=[];
+  for(const name of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:''});
+    const est=_parseListado(rows);
+    if(est.length) cursos.push({curso:String(name).trim(), estudiantes:est});
   }
-  const {error:ee}=await sb.from('estudiante').upsert(filas,{onConflict:'id'});
-  if(ee){ msg.textContent='No pude subir los estudiantes: '+ee.message; return; }
+  if(!cursos.length){ msg.textContent='No encontré estudiantes (documento + nombre) en el archivo.'; return; }
+  if(cursos.length===1){
+    // Una sola hoja: el curso escrito manda; si está vacío, usa el nombre de la hoja.
+    const typed=$('#rCurso').value.trim();
+    cursos[0].curso = typed || cursos[0].curso;
+    if(!cursos[0].curso){ msg.textContent='Escribe el curso (ej: 401).'; return; }
+    await _subirCursos(cursos, grado); return;
+  }
+  // Multi-curso: previsualizar y pedir confirmación con un segundo toque.
+  _rosterPending=cursos;
+  const resumen=cursos.map(c=>`${c.curso} (${c.estudiantes.length})`).join(', ');
+  msg.innerHTML=`Detecté <b>${cursos.length} cursos</b> del Grado ${grado}°: ${resumen}.<br>Toca <b>Subir listado</b> otra vez para confirmar.`;
+}
+async function _subirCursos(cursos, grado){
+  const msg=$('#rMsg'); const anio=new Date().getFullYear(); const now=new Date().toISOString();
+  let tc=0, te=0;
+  for(const c of cursos){
+    msg.textContent=`Subiendo ${c.curso}…`;
+    const cid=await uid('curso',ME.id,c.curso,anio);
+    const {error:ec}=await sb.from('curso').upsert({id:cid,curso:c.curso,grado_num:grado,anio,activo:true,actualizado_en:now},{onConflict:'id'});
+    if(ec){ msg.textContent=`No pude registrar el curso ${c.curso}: ${ec.message}`; return; }
+    const filas=[];
+    for(const e of c.estudiantes){
+      filas.push({id:await uid('estudiante',ME.id,c.curso,anio,'doc:'+e.documento),curso:c.curso,anio,numero:e.numero,
+        documento:e.documento,codigo:e.codigo,nombre:e.nombre,activo:true,actualizado_en:now});
+    }
+    const {error:ee}=await sb.from('estudiante').upsert(filas,{onConflict:'id'});
+    if(ee){ msg.textContent=`No pude subir estudiantes de ${c.curso}: ${ee.message}`; return; }
+    tc++; te+=filas.length;
+  }
   $('#rmodal').classList.remove('show');
-  toast(`Listado de ${curso} cargado (${filas.length})`);
+  toast(`${tc} curso(s), ${te} estudiante(s) cargados`);
   verPlanillas();
 }
 $('#rUp').addEventListener('click',subirListado);
