@@ -252,16 +252,54 @@ async function cargarPesos(){const {data}=await sb.from('pesos_evaluacion').sele
 async function verPlanillas(){
   showView('viewPlanillas');$('#topTitle').textContent='Mis cursos';$('#backTop').style.display='none';
   const box=$('#viewPlanillas');box.innerHTML='<div class="spin">Cargando…</div>';
-  const {data,error}=await sb.from('planilla').select('*').eq('activo',true).order('anio',{ascending:false}).order('curso');
-  if(error){box.innerHTML=`<p class="hint">Error: ${error.message}</p>`;return;}
-  if(!data.length){box.innerHTML='<p class="hint">Aún no hay cursos. Cuando califiques un examen en ODET-Escritorio, el curso aparece aquí.</p>';return;}
+  const [pl,plan]=await Promise.all([
+    sb.from('planilla').select('*').eq('activo',true).order('anio',{ascending:false}).order('curso'),
+    // Planes del material (nivel grado). Si un grado+periodo aún no tiene curso
+    // (sin examen), lo mostramos como tarjeta de grado para que el material se vea.
+    sb.from('actividad_plan').select('grado_num,periodo,anio,sigla,area,asignatura').eq('activo',true),
+  ]);
+  if(pl.error){box.innerHTML=`<p class="hint">Error: ${pl.error.message}</p>`;return;}
+  const planillas=pl.data||[]; const planes=plan.data||[];
+  const cubiertos=new Set(planillas.map(p=>`${p.grado_num}|${p.periodo}|${p.anio}|${p.sigla}`));
+  const vistos=new Set(); const gradoCards=[];
+  for(const g of planes){
+    const k=`${g.grado_num}|${g.periodo}|${g.anio}|${g.sigla}`;
+    if(cubiertos.has(k)||vistos.has(k))continue; vistos.add(k);
+    gradoCards.push({_grado:true,curso:null,grado_num:g.grado_num,periodo:g.periodo,anio:g.anio,sigla:g.sigla,area:g.area,asignatura:g.asignatura});
+  }
+  const todos=[...planillas,...gradoCards];
+  if(!todos.length){box.innerHTML='<p class="hint">Aún no hay cursos. Cuando generes material o califiques un examen en ODET-Escritorio, aparecen aquí.</p>';return;}
   box.innerHTML='<p class="hint" style="margin:2px 0 12px">Toca un curso para ver sus estudiantes.</p><div class="plist"></div>';
   const list=box.querySelector('.plist');
-  data.forEach(p=>{
+  todos.forEach(p=>{
     const b=document.createElement('button');b.className='pcard';
-    b.innerHTML=`<div class="curso">${p.curso||'—'}</div><div class="meta"><b>${p.asignatura||p.area||p.sigla||'Área'}</b><span>Grado ${p.grado_num}° · Periodo ${p.periodo} · ${p.anio}</span></div><div class="chev">›</div>`;
-    b.onclick=()=>verEstudiantes(p);list.appendChild(b);
+    const titulo=p._grado?`Grado ${p.grado_num}°`:(p.curso||'—');
+    const badge=p._grado?'<span class="omrtag">plan de clase</span>':'';
+    b.innerHTML=`<div class="curso">${titulo}</div><div class="meta"><b>${p.asignatura||p.area||p.sigla||'Área'}</b><span>Grado ${p.grado_num}° · Periodo ${p.periodo} · ${p.anio}${badge}</span></div><div class="chev">›</div>`;
+    b.onclick=()=>p._grado?verGradoPlan(p):verEstudiantes(p);list.appendChild(b);
   });
+}
+
+// Vista de un GRADO con plan de material pero sin curso todavía: muestra las
+// actividades de clase (sin estudiantes aún → se llenan al correr el OMR).
+async function verGradoPlan(p){
+  CURRENT.planilla=p;showView('viewStudents');
+  $('#topTitle').textContent=`Grado ${p.grado_num}°`;$('#backTop').style.display='';$('#backTop').onclick=verPlanillas;
+  const box=$('#viewStudents');box.innerHTML='<div class="spin">Cargando…</div>';
+  const {data}=await sb.from('actividad_plan').select('*').eq('activo',true)
+    .eq('grado_num',p.grado_num).eq('periodo',p.periodo).eq('anio',p.anio).eq('sigla',p.sigla)
+    .order('saber').order('numero');
+  const planes=data||[];
+  let html=`<p class="hint" style="margin:2px 0 14px">Actividades de clase de <b>${p.asignatura||p.area||p.sigla}</b> · Grado ${p.grado_num}° · Periodo ${p.periodo}. Los estudiantes aparecen cuando corras el examen OMR de este periodo con tu listado; ahí podrás calificar estas actividades.</p>`;
+  if(!planes.length){box.innerHTML=html+'<p class="hint">Aún no hay actividades. Genera material en ODET-Escritorio.</p>';return;}
+  for(const s of SABERES){
+    const items=planes.filter(x=>x.saber===s.k);
+    if(!items.length)continue;
+    html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3></div>`;
+    items.forEach(a=>{html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}<span class="omrtag">CLASE</span></div></div>`;});
+    html+=`</div>`;
+  }
+  box.innerHTML=html;
 }
 
 // ── Estudiantes ──
