@@ -71,6 +71,14 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
   color:#fff; font-weight:600; font-size:1rem}
 .btn:active{filter:brightness(1.15)}
 .btn.gold{background:var(--gold); color:#20170a}
+.btn.ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line); width:auto; padding:13px 16px; margin-top:0}
+.btn2{width:100%; padding:12px; border:1px dashed var(--gold); border-radius:11px; background:transparent;
+  color:var(--gold); font-weight:600; font-size:.95rem}
+.btn2:active{filter:brightness(1.2)}
+.rosterbar{margin:2px 0 14px}
+.flab{display:block; font-size:.78rem; color:var(--ink-soft); margin:12px 0 5px}
+.finp{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px;
+  background:var(--surface); color:var(--ink); font-size:.95rem}
 .err{color:var(--bajo); font-size:.85rem; margin-top:12px; min-height:1.1em; text-align:center}
 
 /* planillas */
@@ -206,13 +214,60 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
   </div>
 </div>
 
+<!-- MODAL agregar listado de estudiantes -->
+<div class="modal" id="rmodal">
+  <div class="sheet">
+    <div class="grip"></div>
+    <h3>Agregar listado de estudiantes</h3>
+    <p class="hint" style="margin:2px 0 14px">Sube el listado del curso en Excel (<b>.xlsx</b>). Toma el documento y el nombre de cada estudiante; el código es los últimos 4 dígitos del documento.</p>
+    <label class="flab">Curso</label>
+    <input class="finp" id="rCurso" placeholder="Ej: 401" autocomplete="off">
+    <label class="flab">Grado</label>
+    <select class="finp" id="rGrado"></select>
+    <label class="flab">Archivo del listado (.xlsx)</label>
+    <input class="finp" id="rFile" type="file" accept=".xlsx,.xls,.csv">
+    <div id="rMsg" class="hint" style="margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn" id="rUp" style="flex:1">Subir listado</button>
+      <button class="btn ghost" id="rCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5';
 const SUPABASE_URL='https://ixnaffcfnskgxviopeod.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4bmFmZmNmbnNrZ3h2aW9wZW9kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODc5OTUsImV4cCI6MjA5Njc2Mzk5NX0.OjdZ7oEs2XNkXDc_IqRIVyuRc2qHwJwLhA17tcbxaE8';
 const sb=createClient(SUPABASE_URL,SUPABASE_ANON);
+let ME=null;   // usuario autenticado (para ids deterministas que coinciden con el OMR)
+
+// uuid5 idéntico al del escritorio (app/datos/planilla.py) → PWA y OMR generan el
+// MISMO id para la misma planilla/estudiante, así el examen final cae en la
+// planilla de seguimiento que ya existía.
+const NS_UID='6f6de700-0de7-40de-80de-706c616e696c';
+function _hex2bytes(h){h=h.replace(/-/g,'');const a=new Uint8Array(16);for(let i=0;i<16;i++)a[i]=parseInt(h.substr(i*2,2),16);return a;}
+async function uid(...partes){
+  const name=partes.map(p=>String(p)).join('|');
+  const ns=_hex2bytes(NS_UID), nm=new TextEncoder().encode(name);
+  const buf=new Uint8Array(ns.length+nm.length); buf.set(ns,0); buf.set(nm,ns.length);
+  const d=new Uint8Array(await crypto.subtle.digest('SHA-1',buf)).slice(0,16);
+  d[6]=(d[6]&0x0f)|0x50; d[8]=(d[8]&0x3f)|0x80;
+  const h=[...d].map(x=>x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+// Crea la fila de planilla (contenedor) si no existe. La actividad tiene FK a
+// planilla, así que esto corre antes de materializar cualquier columna.
+async function ensurePlanilla(){
+  const p=CURRENT.planilla; if(!p) return null;
+  if(p._ensured) return p.id;
+  await sb.from('planilla').upsert({id:p.id,area:p.area||'',sigla:p.sigla||'',asignatura:p.asignatura||'',
+    curso:p.curso||'',grado_num:p.grado_num,periodo:p.periodo,anio:p.anio,activo:true,
+    actualizado_en:new Date().toISOString()},{onConflict:'id'});
+  p._ensured=true; return p.id;
+}
 
 const SABERES=[
   {k:'cognitivo',label:'Cognitivo',color:'var(--cog)'},
@@ -245,70 +300,59 @@ $('#loginForm').addEventListener('submit',async e=>{
 });
 $('#logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();location.reload();});
 async function boot(){const {data}=await sb.auth.getSession();if(data.session)enterApp();}
-async function enterApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');await cargarPesos();await verPlanillas();}
+async function enterApp(){$('#login').classList.add('hidden');$('#app').classList.remove('hidden');
+  const {data}=await sb.auth.getUser(); ME=data&&data.user?data.user:null;
+  await cargarPesos();await verPlanillas();}
 async function cargarPesos(){const {data}=await sb.from('pesos_evaluacion').select('*').maybeSingle();if(data)PESOS=data;}
 
-// ── Planillas ──
+// ── Planillas de seguimiento ──
+// El listado (curso) enciende la planilla, no el examen. Cada tarjeta es una
+// planilla de seguimiento = curso × periodo × área. Aparece cuando el curso
+// tiene listado Y hay actividad del material para su grado+periodo+área. Las
+// planillas que ya existan (p.ej. del OMR) también se muestran.
 async function verPlanillas(){
   showView('viewPlanillas');$('#topTitle').textContent='Mis cursos';$('#backTop').style.display='none';
   const box=$('#viewPlanillas');box.innerHTML='<div class="spin">Cargando…</div>';
-  const [pl,plan]=await Promise.all([
-    sb.from('planilla').select('*').eq('activo',true).order('anio',{ascending:false}).order('curso'),
-    // Planes del material (nivel grado). Si un grado+periodo aún no tiene curso
-    // (sin examen), lo mostramos como tarjeta de grado para que el material se vea.
+  const [cu,plan,pl]=await Promise.all([
+    sb.from('curso').select('*').eq('activo',true).order('anio',{ascending:false}).order('curso'),
     sb.from('actividad_plan').select('grado_num,periodo,anio,sigla,area,asignatura').eq('activo',true),
+    sb.from('planilla').select('*').eq('activo',true),
   ]);
-  if(pl.error){box.innerHTML=`<p class="hint">Error: ${pl.error.message}</p>`;return;}
-  const planillas=pl.data||[]; const planes=plan.data||[];
-  const cubiertos=new Set(planillas.map(p=>`${p.grado_num}|${p.periodo}|${p.anio}|${p.sigla}`));
-  const vistos=new Set(); const gradoCards=[];
-  for(const g of planes){
-    const k=`${g.grado_num}|${g.periodo}|${g.anio}|${g.sigla}`;
-    if(cubiertos.has(k)||vistos.has(k))continue; vistos.add(k);
-    gradoCards.push({_grado:true,curso:null,grado_num:g.grado_num,periodo:g.periodo,anio:g.anio,sigla:g.sigla,area:g.area,asignatura:g.asignatura});
-  }
-  const todos=[...planillas,...gradoCards];
-  if(!todos.length){box.innerHTML='<p class="hint">Aún no hay cursos. Cuando generes material o califiques un examen en ODET-Escritorio, aparecen aquí.</p>';return;}
-  box.innerHTML='<p class="hint" style="margin:2px 0 12px">Toca un curso para ver sus estudiantes.</p><div class="plist"></div>';
-  const list=box.querySelector('.plist');
-  todos.forEach(p=>{
-    const b=document.createElement('button');b.className='pcard';
-    const titulo=p._grado?`Grado ${p.grado_num}°`:(p.curso||'—');
-    const badge=p._grado?'<span class="omrtag">plan de clase</span>':'';
-    b.innerHTML=`<div class="curso">${titulo}</div><div class="meta"><b>${p.asignatura||p.area||p.sigla||'Área'}</b><span>Grado ${p.grado_num}° · Periodo ${p.periodo} · ${p.anio}${badge}</span></div><div class="chev">›</div>`;
-    b.onclick=()=>p._grado?verGradoPlan(p):verEstudiantes(p);list.appendChild(b);
-  });
-}
+  if(cu.error){box.innerHTML=`<p class="hint">Error: ${cu.error.message}</p>`;return;}
+  const cursos=cu.data||[], planes=plan.data||[], planillas=pl.data||[];
+  const cards=[], seen=new Set();
+  const push=c=>{const k=`${c.curso}|${c.periodo}|${c.anio}|${c.sigla}`;if(seen.has(k))return;seen.add(k);cards.push(c);};
+  // 1) Planillas ya existentes (OMR u otras): se respetan tal cual.
+  planillas.forEach(p=>push({curso:p.curso,grado_num:p.grado_num,periodo:p.periodo,anio:p.anio,sigla:p.sigla,area:p.area,asignatura:p.asignatura}));
+  // 2) Curso con listado × plan del material del mismo grado+periodo+área.
+  cursos.forEach(c=>planes.filter(pl=>pl.grado_num===c.grado_num&&pl.anio===c.anio).forEach(pl=>
+    push({curso:c.curso,grado_num:c.grado_num,periodo:pl.periodo,anio:pl.anio,sigla:pl.sigla,area:pl.area,asignatura:pl.asignatura})));
+  cards.sort((a,b)=>b.anio-a.anio||String(a.curso).localeCompare(String(b.curso))||a.periodo-b.periodo||String(a.sigla).localeCompare(String(b.sigla)));
 
-// Vista de un GRADO con plan de material pero sin curso todavía: muestra las
-// actividades de clase (sin estudiantes aún → se llenan al correr el OMR).
-async function verGradoPlan(p){
-  CURRENT.planilla=p;showView('viewStudents');
-  $('#topTitle').textContent=`Grado ${p.grado_num}°`;$('#backTop').style.display='';$('#backTop').onclick=verPlanillas;
-  const box=$('#viewStudents');box.innerHTML='<div class="spin">Cargando…</div>';
-  const {data}=await sb.from('actividad_plan').select('*').eq('activo',true)
-    .eq('grado_num',p.grado_num).eq('periodo',p.periodo).eq('anio',p.anio).eq('sigla',p.sigla)
-    .order('saber').order('numero');
-  const planes=data||[];
-  let html=`<p class="hint" style="margin:2px 0 14px">Actividades de clase de <b>${p.asignatura||p.area||p.sigla}</b> · Grado ${p.grado_num}° · Periodo ${p.periodo}. Los estudiantes aparecen cuando corras el examen OMR de este periodo con tu listado; ahí podrás calificar estas actividades.</p>`;
-  if(!planes.length){box.innerHTML=html+'<p class="hint">Aún no hay actividades. Genera material en ODET-Escritorio.</p>';return;}
-  for(const s of SABERES){
-    const items=planes.filter(x=>x.saber===s.k);
-    if(!items.length)continue;
-    html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3></div>`;
-    items.forEach(a=>{html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}<span class="omrtag">CLASE</span></div></div>`;});
-    html+=`</div>`;
-  }
-  box.innerHTML=html;
+  let head=`<div class="rosterbar"><button class="btn2" id="btnRoster">+ Agregar listado de estudiantes</button></div>`;
+  if(!cursos.length&&!cards.length){box.innerHTML=head+'<p class="hint">Aún no tienes cursos. Sube el listado de un curso para empezar tu planilla de seguimiento; el material que generes en ODET caerá aquí.</p>';wireRoster();return;}
+  if(!cards.length){box.innerHTML=head+`<p class="hint">Ya tienes ${cursos.length} listado(s). La planilla de seguimiento de un curso aparece cuando generes material de su grado y periodo en ODET-Escritorio.</p>`;wireRoster();return;}
+  box.innerHTML=head+'<p class="hint" style="margin:2px 0 12px">Toca una planilla para hacer el seguimiento del curso.</p><div class="plist"></div>';
+  const list=box.querySelector('.plist');
+  cards.forEach(p=>{
+    const b=document.createElement('button');b.className='pcard';
+    b.innerHTML=`<div class="curso">${p.curso||'—'}</div><div class="meta"><b>${p.asignatura||p.area||p.sigla||'Área'}</b><span>Grado ${p.grado_num}° · Periodo ${p.periodo} · ${p.anio}</span></div><div class="chev">›</div>`;
+    b.onclick=()=>verEstudiantes(p);list.appendChild(b);
+  });
+  wireRoster();
 }
+function wireRoster(){const b=$('#btnRoster');if(b)b.onclick=abrirRoster;}
 
 // ── Estudiantes ──
 async function verEstudiantes(p){
+  // id determinista (igual fórmula que el OMR) → el examen final cae aquí.
+  if(!p.id) p.id=await uid('planilla', ME&&ME.id, p.sigla, p.curso, p.periodo, p.anio);
+  p._ensured=false;
   CURRENT.planilla=p;showView('viewStudents');
-  $('#topTitle').textContent=`Curso ${p.curso}`;$('#backTop').style.display='';$('#backTop').onclick=verPlanillas;
+  $('#topTitle').textContent=`Curso ${p.curso||'—'}`;$('#backTop').style.display='';$('#backTop').onclick=verPlanillas;
   const box=$('#viewStudents');box.innerHTML='<div class="spin">Cargando…</div>';
   const [est,act,plan]=await Promise.all([
-    sb.from('estudiante').select('*').eq('activo',true).eq('curso',p.curso).eq('anio',p.anio).order('nombre'),
+    sb.from('estudiante').select('*').eq('activo',true).eq('curso',p.curso).eq('anio',p.anio).order('numero').order('nombre'),
     sb.from('actividad').select('*').eq('activo',true).eq('planilla_id',p.id),
     // Plan de actividades del GRADO (generado desde el material). Aparece en
     // todos los cursos del grado; se materializa por curso al poner la 1ª nota.
@@ -417,13 +461,15 @@ async function materializar(planId){
   const ex=CURRENT.actividades.find(a=>a.ref_plan===planId);
   if(ex)return ex.id;
   const plan=(CURRENT.planes||[]).find(p=>p.id===planId);if(!plan)return null;
-  const num=CURRENT.actividades.filter(a=>a.saber===plan.saber).reduce((m,a)=>Math.max(m,a.numero),0)+1;
-  const {data,error}=await sb.from('actividad').insert({
-    planilla_id:CURRENT.planilla.id,saber:plan.saber,numero:num,nombre:plan.nombre,
+  const pid=await ensurePlanilla();                          // FK: la planilla debe existir
+  const aid=await uid('actividad_mat',pid,plan.id);          // id estable entre dispositivos
+  const {data,error}=await sb.from('actividad').upsert({
+    id:aid,planilla_id:pid,saber:plan.saber,numero:plan.numero,nombre:plan.nombre,
     origen:'material',ref_plan:plan.id,activo:true,actualizado_en:new Date().toISOString()
-  }).select().single();
+  },{onConflict:'id'}).select().single();
   if(error){return null;}
-  CURRENT.actividades.push(data);return data.id;
+  const i=CURRENT.actividades.findIndex(a=>a.id===aid);if(i>=0)CURRENT.actividades[i]=data;else CURRENT.actividades.push(data);
+  return aid;
 }
 async function guardarNota(a,e,valStr,est,rerender=true){
   const v=valStr.trim()===''?null:Number(valStr.replace(',','.'));
@@ -446,11 +492,80 @@ async function guardarNota(a,e,valStr,est,rerender=true){
 }
 async function agregarActividad(saber,nombre,est){
   if(!nombre){toast('Ponle un nombre a la actividad');return;}
+  const pid=await ensurePlanilla();                     // FK: la planilla debe existir
   const num=actividadesDe(saber).reduce((m,a)=>Math.max(m,a.numero),0)+1;
-  const {data,error}=await sb.from('actividad').insert({planilla_id:CURRENT.planilla.id,saber,numero:num,nombre,origen:'manual',activo:true,actualizado_en:new Date().toISOString()}).select().single();
+  const {data,error}=await sb.from('actividad').insert({planilla_id:pid,saber,numero:num,nombre,origen:'manual',activo:true,actualizado_en:new Date().toISOString()}).select().single();
   if(error){toast('No se pudo crear');return;}
   CURRENT.actividades.push(data);toast('Actividad creada');render(est);
 }
+
+// ── Agregar listado de estudiantes (roster) ──
+function abrirRoster(){
+  const g=$('#rGrado'); if(!g.options.length){for(let i=1;i<=11;i++){const o=document.createElement('option');o.value=i;o.textContent=`Grado ${i}°`;g.appendChild(o);}}
+  $('#rCurso').value=''; $('#rFile').value=''; $('#rMsg').textContent='';
+  $('#rmodal').classList.add('show');
+}
+$('#rCancel').addEventListener('click',()=>$('#rmodal').classList.remove('show'));
+$('#rmodal').addEventListener('click',e=>{if(e.target.id==='rmodal')$('#rmodal').classList.remove('show');});
+
+// Réplica del heurístico institucional (lista_curso._pares_institucional):
+// por fila, el número largo (≥5 dígitos) es el documento; el texto con letras es
+// el nombre; el código = últimos 4 del documento.
+function _parseListado(rows){
+  const out=[]; let n=0;
+  for(const row of rows){
+    let doc='', nom='';
+    for(const cell of row){
+      if(cell==null) continue;
+      const s=String(cell).trim(); if(!s) continue;
+      const digs=s.replace(/\D/g,'');
+      if(digs.length>=5 && digs.length>doc.length){ doc=digs; }
+      else if(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(s) && s.length>nom.length && s.length>3){ nom=s; }
+    }
+    if(!doc) continue;                 // fila sin documento → cabecera o vacía
+    n++; out.push({numero:n, documento:doc, codigo:doc.slice(-4), nombre:nom||`(código ${doc.slice(-4)})`});
+  }
+  return out;
+}
+async function subirListado(){
+  const curso=$('#rCurso').value.trim();
+  const grado=parseInt($('#rGrado').value,10);
+  const file=$('#rFile').files[0];
+  const msg=$('#rMsg');
+  if(!curso){msg.textContent='Escribe el curso (ej: 401).';return;}
+  if(!file){msg.textContent='Elige el archivo .xlsx del listado.';return;}
+  if(!ME||!ME.id){msg.textContent='Sesión expirada. Vuelve a entrar.';return;}
+  msg.textContent='Leyendo el archivo…';
+  let estudiantes;
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    estudiantes=_parseListado(rows);
+  }catch(err){ msg.textContent='No pude leer el archivo. Ábrelo en Excel y usa "Guardar como .xlsx".'; return; }
+  if(!estudiantes.length){ msg.textContent='No encontré estudiantes (documento + nombre) en el archivo.'; return; }
+  msg.textContent=`Subiendo ${estudiantes.length} estudiante(s)…`;
+  const anio=new Date().getFullYear();
+  const now=new Date().toISOString();
+  // Registro del curso (para que aparezca en la lista aunque no haya notas aún).
+  const cid=await uid('curso',ME.id,curso,anio);
+  const {error:ec}=await sb.from('curso').upsert({id:cid,curso,grado_num:grado,anio,activo:true,actualizado_en:now},{onConflict:'id'});
+  if(ec){ msg.textContent='No pude registrar el curso: '+ec.message; return; }
+  // Estudiantes con id determinista (coincide con el OMR por documento).
+  const filas=[];
+  for(const e of estudiantes){
+    const llave='doc:'+e.documento;
+    filas.push({id:await uid('estudiante',ME.id,curso,anio,llave),curso,anio,numero:e.numero,
+      documento:e.documento,codigo:e.codigo,nombre:e.nombre,activo:true,actualizado_en:now});
+  }
+  const {error:ee}=await sb.from('estudiante').upsert(filas,{onConflict:'id'});
+  if(ee){ msg.textContent='No pude subir los estudiantes: '+ee.message; return; }
+  $('#rmodal').classList.remove('show');
+  toast(`Listado de ${curso} cargado (${filas.length})`);
+  verPlanillas();
+}
+$('#rUp').addEventListener('click',subirListado);
 
 function showView(id){['viewPlanillas','viewStudents','viewStudent'].forEach(v=>$('#'+v).classList.toggle('hidden',v!==id));window.scrollTo(0,0);}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
