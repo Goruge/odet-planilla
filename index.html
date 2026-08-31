@@ -398,9 +398,16 @@ function wireReportes(box){
 
 // ── cálculo ──
 function actividadesDe(s){
-  const reales=CURRENT.actividades.filter(a=>a.saber===s);
+  const planPorId=Object.fromEntries((CURRENT.planes||[]).map(p=>[p.id,p]));
+  // Actividades reales. Si vienen de un plan (ref_plan), el nombre y la
+  // descripción se toman SIEMPRE del plan actual (el docente los edita en ODET);
+  // las notas siguen pegadas por id, no se tocan.
+  const reales=CURRENT.actividades.filter(a=>a.saber===s).map(a=>{
+    const p=a.ref_plan&&planPorId[a.ref_plan];
+    return p?{...a,nombre:p.nombre,descripcion:p.descripcion}:a;
+  });
   // Planes del grado aún no materializados en este curso (sin actividad con ese ref_plan).
-  const hechos=new Set(reales.map(a=>a.ref_plan).filter(Boolean));
+  const hechos=new Set(CURRENT.actividades.filter(a=>a.saber===s).map(a=>a.ref_plan).filter(Boolean));
   const virtuales=(CURRENT.planes||[]).filter(p=>p.saber===s&&!hechos.has(p.id))
     .map(p=>({id:'plan:'+p.id,saber:s,numero:p.numero,nombre:p.nombre,descripcion:p.descripcion,origen:'material',_virtual:true}));
   return [...reales,...virtuales].sort((x,y)=>x.numero-y.numero);
