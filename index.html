@@ -126,6 +126,8 @@ input:focus{outline:2px solid var(--gold); outline-offset:1px}
 .saber .sh .pct{font-family:"IBM Plex Mono",monospace; font-size:.82rem; color:var(--ink-soft)}
 .act{display:flex; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid var(--surface-2)}
 .act .an{flex:1; font-size:.9rem} .act .an small{display:block; color:var(--ink-soft); font-size:.7rem; font-family:"IBM Plex Mono",monospace}
+.act .adesc{margin-top:4px; font-size:.76rem; color:var(--ink-soft); line-height:1.4; font-weight:400}
+.act .adesc div{margin:1px 0}
 .omrtag{font-family:"IBM Plex Mono",monospace; font-size:.58rem; letter-spacing:.05em; color:var(--gold-2);
   border:1px solid var(--line-2); border-radius:5px; padding:1px 5px; margin-left:6px}
 /* Rueda de nota INLINE: el scroll pasa dentro del recuadro, sin popup */
@@ -284,6 +286,9 @@ let CURRENT={planilla:null,estudiantes:[],actividades:[],notas:[],planes:[]};
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
 function desempeno(n){if(n==null)return{t:'—',c:'var(--ink-soft)'};if(n<3)return{t:'Bajo',c:'var(--bajo)'};if(n<4)return{t:'Básico',c:'var(--basico)'};if(n<=4.5)return{t:'Alto',c:'var(--alto)'};return{t:'Superior',c:'var(--superior)'};}
 function esSinNombre(nom){return !nom || /^\(c[oó]digo/i.test(nom);}
+// Indicador(es) de competencia bajo el título de la actividad (uno por línea).
+function descHTML(txt){const ls=String(txt||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  return ls.length?`<div class="adesc">${ls.map(l=>`<div>${l}</div>`).join('')}</div>`:'';}
 
 // modal de reportes (placeholder hasta tener los formatos)
 function abrirModal(titulo,cuerpo){$('#mTitle').textContent=titulo;$('#mBody').textContent=cuerpo;$('#modal').classList.add('show');}
@@ -397,7 +402,7 @@ function actividadesDe(s){
   // Planes del grado aún no materializados en este curso (sin actividad con ese ref_plan).
   const hechos=new Set(reales.map(a=>a.ref_plan).filter(Boolean));
   const virtuales=(CURRENT.planes||[]).filter(p=>p.saber===s&&!hechos.has(p.id))
-    .map(p=>({id:'plan:'+p.id,saber:s,numero:p.numero,nombre:p.nombre,origen:'material',_virtual:true}));
+    .map(p=>({id:'plan:'+p.id,saber:s,numero:p.numero,nombre:p.nombre,descripcion:p.descripcion,origen:'material',_virtual:true}));
   return [...reales,...virtuales].sort((x,y)=>x.numero-y.numero);
 }
 function notaDe(a,e){return CURRENT.notas.find(n=>n.actividad_id===a&&n.estudiante_id===e);}
@@ -422,7 +427,7 @@ function render(e){
     html+=`<div class="saber"><div class="sh"><span class="chip" style="background:${s.color}"></span><h3>${s.label}</h3><span class="w">${P[s.k]}%</span><span class="pct" data-saber="${s.k}">${pr!=null?pr.toFixed(1):'—'}</span></div>`;
     acts.forEach(a=>{const n=notaDe(a.id,e.id);const v=n&&n.valor!=null?Number(n.valor).toFixed(1):'';
       const optsH=NOTA_VALS.map(o=>`<div class="wopt">${o||'—'}</div>`).join('');
-      html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}${a.origen==='omr'?'<span class="omrtag">OMR</span>':a.origen==='material'?'<span class="omrtag">CLASE</span>':''}</div>
+      html+=`<div class="act"><div class="an">${a.nombre||('ACT '+a.numero)}${a.origen==='omr'?'<span class="omrtag">OMR</span>':a.origen==='material'?'<span class="omrtag">CLASE</span>':''}${descHTML(a.descripcion)}</div>
         <div class="wheel" data-act="${a.id}" data-est="${e.id}" data-val="${v}"><div class="wtrack">${optsH}</div><div class="wband"></div></div></div>`;});
     html+=`<div class="addact"><input placeholder="Nueva actividad de ${s.label.toLowerCase()}" data-newname="${s.k}"><button data-add="${s.k}">+ Agregar</button></div></div>`;
   }
@@ -465,7 +470,7 @@ async function materializar(planId){
   const aid=await uid('actividad_mat',pid,plan.id);          // id estable entre dispositivos
   const {data,error}=await sb.from('actividad').upsert({
     id:aid,planilla_id:pid,saber:plan.saber,numero:plan.numero,nombre:plan.nombre,
-    origen:'material',ref_plan:plan.id,activo:true,actualizado_en:new Date().toISOString()
+    descripcion:plan.descripcion||'',origen:'material',ref_plan:plan.id,activo:true,actualizado_en:new Date().toISOString()
   },{onConflict:'id'}).select().single();
   if(error){return null;}
   const i=CURRENT.actividades.findIndex(a=>a.id===aid);if(i>=0)CURRENT.actividades[i]=data;else CURRENT.actividades.push(data);
